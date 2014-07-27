@@ -1,0 +1,129 @@
+<project name="miscfastcompact" default="jar" basedir=".">
+  <description>
+    Miscellaneous Fast and Compact Data Structures 
+  </description>
+
+  <property environment="env"/> 
+  <property file="build.properties" />
+  <property name="mainSrc" location="src/main"/>
+  <property name="testSrc" location="src/test"/>
+  <property name="build" location="build"/>
+  <property name="jar.location" location="miscfastcompact.jar" />
+  <property name="javadoc.dir" location="doc/javadoc" />
+
+  <path id="compile.classpath">
+    <fileset dir="lib">
+     <include name="**/*.jar" />
+      <include name="**/*.zip" />
+    </fileset>
+  </path>
+
+  <target name="compile.init">
+    <!-- Create the time stamp -->
+    <tstamp/>
+    <!-- Create the build directory structure used by compile -->
+    <mkdir dir="${build}/main"/>
+  </target>
+
+  <target name="compile" depends="compile.init"
+        description="compile the source " >
+    <!-- Compile the java code from ${src} into ${build} -->
+    <javac srcdir="${mainSrc}" destdir="${build}/main" 
+           debuglevel="lines,source" 
+           debug="true"
+           target="1.7"
+           source="1.7"
+           deprecation="true"
+           classpathref="compile.classpath">
+    </javac>
+  </target>
+
+  <target name="jar" depends="compile"
+        description="generate the distribution" >
+    <jar jarfile="${jar.location}" basedir="${build}/main"/>
+    <delete dir="${build}/main"/>
+  </target>
+
+  <target name="clean.classes"
+        description="clean up" >
+    <delete dir="${build}"/>
+    <delete dir="${dist}"/>
+  </target>
+
+  <target name="clean" depends="clean.classes" >
+    <!-- full clean also removes the generated JAR file -->
+    <delete file="${jar.location}" />
+    <delete dir="${javadoc.dir}" />
+    <delete file="testout/*" />
+    <delete>
+      <fileset dir="testout" includes="**/*"/>
+    </delete>
+  </target>
+
+  <target name="javadoc" description="create documentation">
+    <mkdir dir="${javadoc.dir}" />
+    <javadoc destdir="${javadoc.dir}" packagenames="*">
+      <sourcepath>
+        <pathelement location="${src}" />
+      </sourcepath>
+      <classpath refid="compile.classpath" />
+    </javadoc>
+  </target>
+  <target name="doc" depends="javadoc" description="create documentation">
+  </target> 
+
+  <target name="dist" depends="jar,javadoc" />
+
+
+  <path id="test.classpath">
+    <fileset dir="lib">
+      <include name="**/*.jar" />
+    </fileset>
+    <fileset dir="${build}/test">
+      <include name="**/*.jar" />
+    </fileset>    
+    <pathelement location="${jar.location}" />
+  </path>
+
+  <target name="test.init">
+    <mkdir dir="${build}/test"/>
+  </target>
+
+  <target name="test.compile" depends="test.init"
+        description="compile the test sources " >
+    <javac srcdir="${testSrc}" destdir="${build}/test" 
+           debuglevel="lines,source" 
+           debug="true"
+           target="1.7"
+           source="1.7"
+           deprecation="true"
+           classpathref="test.classpath">
+    </javac>
+  </target>
+
+ 
+  <target name="tests" depends="jar,test.compile,test1"/>
+
+  <target name="test1" depends="jar,test.compile">
+    <junit fork="true" showoutput="yes" printsummary="yes">
+      <classpath>
+        <path refid="test.classpath" />        
+      </classpath>
+      <sysproperty key="java.awt.headless" value="true" />
+      <formatter type="xml" />
+      <test name="com.jpetrak.miscfastcompact.TestsAll" outfile="TestsAll" todir="testout" />
+    </junit>
+    <junitreport  tofile="testout/TestSuites.xml">
+      <fileset dir="testout">
+        <include name="TEST-*.xml" />
+      </fileset>
+      <report todir="testout" format="noframes" />
+    </junitreport>
+  </target>
+
+
+  <target name="all" depends="dist,tests" />
+  <target name="build" depends="jar" />
+  <target name="test" depends="tests" />
+</project>
+
