@@ -1,36 +1,50 @@
 package com.jpetrak.miscfastcompact.store;
 
 import com.jpetrak.miscfastcompact.utils.Utils;
-import it.unimi.dsi.fastutil.chars.CharBigArrayBigList;
+import it.unimi.dsi.fastutil.chars.CharArrayList;
 import java.io.Serializable;
 
+import it.unimi.dsi.fastutil.chars.CharBigArrayBigList;
+
 /**
- * CAUTION: this probably does not work yet, the offsets in the list 
- * store are probably not right!!
+ * This represents a store that can add and retrieve char[] elements. Each char[] chunk
+ * is identified by an int index which is returned when adding the chunk and which
+ * can be used to get it back. The size of each chunk as well as the number of 
+ * chunks and the total size of all chunks is limited to MAXINT. 
+ * <p>
+ *  The store supports storing the following:
+ *  <ul>
+ *  <li>Varying length chunks. These consist of two chars that encode the length of the data 
+ *  (not including the length field) followed  by the data
+ *  <li>Fixed length chunks: just data, the client must know the length and supply it both when
+ *  adding and retrieving data
+ *  <li>Lists: each list consists of one or more elements of varying length chunks. The first 
+ *  of a list consists of the the chunk length, the list size, the index of the next element chunk
+ *   and the actual chunk data for the first element. Elements 2-N consist of the chunk length,
+ *   the index of the next element chunk and the actual chunk data. Next chunk index and in the 
+ *   first element, the list size are included in chunk length, the chunk length field itself
+ *   is not.
+ *  </ul>
  * 
  * @author Johann Petrak
+ *
  */
-public class BigStoreOfChars implements Serializable {
-  
+public class StoreOfChars implements Serializable {
+   
   /**
    * 
    */
+  private static final long serialVersionUID = 123L;
   
-  private static final long serialVersionUID = 1001L;
+  CharArrayList theList;
+  int curIndex = 0;
   
-  // the backing array that holds all the actual data
-  CharBigArrayBigList backingArray;
-  // TODO: why is this an int when the backing array is BIG
-  // TODO: do we needs this if we could use size instead?
-  long curIndex = 0;
-  
-  public void StoreOfChars(long initialCapacity) {
-    backingArray = new CharBigArrayBigList(initialCapacity);
+  public StoreOfChars(int capacity) {
+    theList = new CharArrayList(capacity);
   }
-  public void StoreOfChars() {
-    backingArray = new CharBigArrayBigList();
+  public StoreOfChars() {
+    theList = new CharArrayList();
   }
-  
   
   private char[] zeroChars = Utils.int2TwoChars(0); 
   private char[] oneChars = Utils.int2TwoChars(1);
@@ -40,10 +54,9 @@ public class BigStoreOfChars implements Serializable {
    * @param data
    * @return
    */
-  public long addData(char[] data) {
+  public int addData(char[] data) {
     // remember where we store the data
-    long oldIndex = curIndex;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
+    int oldIndex = curIndex;
     // first store the length of the data
     // we split the int that represents the length into to chars
     int l = data.length;
@@ -53,7 +66,6 @@ public class BigStoreOfChars implements Serializable {
     // after storing, the new index is now moved by the length of the data
     // plus the two chars where we store the length
     curIndex += data.length+2;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
     return oldIndex;
   }
 
@@ -66,20 +78,18 @@ public class BigStoreOfChars implements Serializable {
    * @param data
    * @return
    */
-  public long addFixedLengthData(char[] data) {
+  public int addFixedLengthData(char[] data) {
     // remember where we store the data
-    long oldIndex = curIndex;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
+    int oldIndex = curIndex;
     addChars(data);
     // after storing, the new index is now moved by the length of the data
     curIndex += data.length;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
     return oldIndex;
   }
   
-  public long replaceFixedLengthData(long index, char[] data) {
+  public int replaceFixedLengthData(int index, char[] data) {
     for(int i = 0; i<data.length; i++) {
-      backingArray.set(index+i,data[i]);
+      theList.set(index+i,data[i]);
     }
     return index;
   }
@@ -90,13 +100,13 @@ public class BigStoreOfChars implements Serializable {
    * @param index
    * @return
    */
-  public char[] getData(long index) {
+  public char[] getData(int index) {
     // retrieve the length 
-    int l = Utils.twoChars2Int(backingArray.get(index), backingArray.get(index+1));
+    int l = Utils.twoChars2Int(theList.get(index), theList.get(index+1));
     // now retrieve the characters for this data block
     char data[] = new char[l];
     for(int i=0; i<l; i++) {
-      data[i] = backingArray.get(index+2+i);
+      data[i] = theList.get(index+2+i);
     }
     return data;
   }
@@ -106,10 +116,10 @@ public class BigStoreOfChars implements Serializable {
    * @param index
    * @return
    */
-  public char[] getFixedLengthData(long index, int length) {
+  public char[] getFixedLengthData(int index, int length) {
     char data[] = new char[length];
     for(int i=0; i<length; i++) {
-      data[i] = backingArray.get(index+i);
+      data[i] = theList.get(index+i);
     }
     return data;
   }
@@ -121,14 +131,13 @@ public class BigStoreOfChars implements Serializable {
    * @param data
    * @return
    */
-  public long addListData(char[] data) {
+  public int addListData(char[] data) {
     // create the special first list entry: 
     // = length of list (int=2 chars), set to 1
-    // = index of next list entry (long=4 chars), set to 0
+    // = index of next list entry (int=2 chars), set to 0
     // = actual data
     // remember where we store the data
-    long oldIndex = curIndex;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
+    int oldIndex = curIndex;
     // first store the length of the data: for the first list entry
     // this also includes size and next element index, so add 4
     // we split the int that represents the length into to chars
@@ -137,12 +146,10 @@ public class BigStoreOfChars implements Serializable {
     addChars(lAsChars);
     addChars(oneChars);
     addChars(zeroChars);
-    addChars(zeroChars);
     addChars(data);
     // after storing, the new index is now moved by the length of the data
     // plus the two chars where we store the length
-    curIndex += data.length+8;
-    System.err.println("curIndex="+curIndex+", size="+backingArray.size64());
+    curIndex += data.length+6;
     return oldIndex;    
   }
   
@@ -156,7 +163,7 @@ public class BigStoreOfChars implements Serializable {
    */
   // TODO: instead of doing getData to get the element indices, just directly access
   // the characters
-  public long addListData(int index, char[] data) {
+  public int addListData(int index, char[] data) {
     if(index <= 0) {
       return addListData(data);
     }
@@ -169,17 +176,17 @@ public class BigStoreOfChars implements Serializable {
     
     // update the size
     char sz[] = Utils.int2TwoChars(size+1);
-    backingArray.set(index+2,sz[0]); // just skip the data length characters: 2 characters
-    backingArray.set(index+3,sz[1]);
+    theList.set(index+2,sz[0]); // just skip the data length characters: 2 characters
+    theList.set(index+3,sz[1]);
     
     
     // store the new data
-    long newBlockIndex = addNewListBlock(data);
+    int newBlockIndex = addNewListBlock(data);
     
     // now add the index of that block to either the first block or 
     // dereference until we are the correct block
     
-    long curBlockIndex = index; 
+    int curBlockIndex = index; 
     // if we need to append not at the first block (size!=1, get the next block which
     // corresponds to size=2    
     // then if size > 2, iterate as often as still needed
@@ -191,19 +198,15 @@ public class BigStoreOfChars implements Serializable {
     }
     
     // encode the new block index 
-    char idx[] = Utils.long2FourChars(newBlockIndex);
+    char idx[] = Utils.int2TwoChars(newBlockIndex);
     
     
     if(size == 1) {
-      backingArray.set(index+4,idx[0]);
-      backingArray.set(index+5,idx[1]);   
-      backingArray.set(index+6,idx[2]);
-      backingArray.set(index+7,idx[3]);
+      theList.set(index+4,idx[0]);
+      theList.set(index+5,idx[1]);            
     } else {
-      backingArray.set(curBlockIndex+2,idx[0]);
-      backingArray.set(curBlockIndex+3,idx[1]);                  
-      backingArray.set(curBlockIndex+4,idx[2]);
-      backingArray.set(curBlockIndex+5,idx[3]);
+      theList.set(curBlockIndex+2,idx[0]);
+      theList.set(curBlockIndex+3,idx[1]);                  
     }
     
     
@@ -216,7 +219,7 @@ public class BigStoreOfChars implements Serializable {
    * @param element
    * @return
    */
-  public char[] getListData(long index, int element) {
+  public char[] getListData(int index, int element) {
     // get the first block which must exist
     int size = getListSize(index);
     if(size <= 0) {
@@ -235,7 +238,7 @@ public class BigStoreOfChars implements Serializable {
     }
     // if we need an element >0, 
     // de-reference the current block "element" times and get the data from there
-    long nextBlockIndex = getNextElementIndex4First(index);
+    int nextBlockIndex = getNextElementIndex4First(index);
     // we did already the first dereferencing from the first block, so if necessary
     // dereference element-1 more times
     for(int i=0;i<(element-1);i++) {
@@ -253,14 +256,14 @@ public class BigStoreOfChars implements Serializable {
    * @param chunk the chunk to find
    * @return the index of the chunk in the list or -1 if not found
    */
-  public int findListData(long index, char[] chunk) {
+  public int findListData(int index, char[] chunk) {
     int elementIndex = 0;
     
     // if the list exists at all, there always must be at least one element, so
     // always check the first element.
     // Find the start and the length of the first element and compare
-    int length = Utils.twoChars2Int(backingArray.get(index), backingArray.get(index+1));
-    long chunkIndex = index+6;  // 2 for the chunk length, 2 for list size,, 4 for next element index
+    int length = Utils.twoChars2Int(theList.get(index), theList.get(index+1));
+    int chunkIndex = index+6;  // 2 for the chunk length, 2 for list size,, 2 for next element index
     if(isChunkEqual(chunkIndex,length-4,chunk)) {
       return elementIndex;
     }
@@ -269,7 +272,7 @@ public class BigStoreOfChars implements Serializable {
     while(nextBlockIndex != 0) {
       elementIndex++;
       // now check the block at this index!
-      length = Utils.twoChars2Int(backingArray.get(nextBlockIndex), backingArray.get(nextBlockIndex+1));
+      length = Utils.twoChars2Int(theList.get(nextBlockIndex), theList.get(nextBlockIndex+1));
       chunkIndex = nextBlockIndex+4; // 2 for chunk length, 2 for next element index
       if(isChunkEqual(chunkIndex,length-2,chunk)) {
         return elementIndex;
@@ -288,12 +291,12 @@ public class BigStoreOfChars implements Serializable {
    * @param chunk
    * @return
    */
-  protected boolean isChunkEqual(long index, int length, char[] chunk) {
+  protected boolean isChunkEqual(int index, int length, char[] chunk) {
     if(chunk.length != length) {
       return false;
     }
     for(int i = 0; i<length; i++) {
-      if(backingArray.get(index+i) != chunk[i]) {
+      if(theList.get(index+i) != chunk[i]) {
         return false;
       }
     }
@@ -305,39 +308,39 @@ public class BigStoreOfChars implements Serializable {
    * @param index
    * @return
    */
-  public int getListSize(long index) {
-   return Utils.twoChars2Int(backingArray.get(index+2), backingArray.get(index+3));
+  public int getListSize(int index) {
+   return Utils.twoChars2Int(theList.get(index+2), theList.get(index+3));
   }
   
   //*******************************************************************
   
   
-  private int getNextElementIndex4First(long index) {
-    return Utils.twoChars2Int(backingArray.get(index+4), backingArray.get(index+5));
+  private int getNextElementIndex4First(int index) {
+    return Utils.twoChars2Int(theList.get(index+4), theList.get(index+5));
   }
-  private int getNextElementIndex4Other(long index) {
-    return Utils.twoChars2Int(backingArray.get(index+2), backingArray.get(index+3));
+  private int getNextElementIndex4Other(int index) {
+    return Utils.twoChars2Int(theList.get(index+2), theList.get(index+3));
   }
   
   // special method to retrieve just the data from a list element: same as 
   // the ordinary get data, except the we have to skip to chars at the 
   // beginning which is the next element pointer, or the size and next element pointer
   // without is 2 or 4 for these.
-  private char[] getDataWithout(long index, int without) {
+  private char[] getDataWithout(int index, int without) {
     // retrieve the length 
-    int l = Utils.twoChars2Int(backingArray.get(index), backingArray.get(index+1));
+    int l = Utils.twoChars2Int(theList.get(index), theList.get(index+1));
     // now retrieve the characters for this data block
     char data[] = new char[l-without];
     for(int i=0; i<(l-without); i++) {
-      data[i] = backingArray.get(index+2+without+i);
+      data[i] = theList.get(index+2+without+i);
     }
     return data;
   }
   
   // similar to addData but also adds the empty next block entry at the beginning 
-  private long addNewListBlock(char[] data) {
+  private int addNewListBlock(char[] data) {
     // remember where we store the data
-    long oldIndex = curIndex;
+    int oldIndex = curIndex;
     // first store the length of the data
     // we split the int that represents the length into to chars
     int l = data.length+2;
@@ -354,7 +357,9 @@ public class BigStoreOfChars implements Serializable {
   
   private void addChars(char[] cs) {
     for(char c : cs) {
-      backingArray.add(c);
+      theList.add(c);
     }
   }
+  
+  
 }

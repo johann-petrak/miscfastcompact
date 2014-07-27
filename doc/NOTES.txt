@@ -1,0 +1,24 @@
+Libraries maybe worth checking out:
+* Trove http://trove.starlight-systems.com/
+* Commons Collections http://commons.apache.org/proper/commons-collections/
+* Commons Primitives (for working with int etc) http://commons.apache.org/proper/commons-primitives/
+* Guava https://code.google.com/p/guava-libraries/
+* PCJ (last update: 2003) http://pcj.sourceforge.net/
+* tclib: http://freecode.com/projects/tclib (VER OLD: 2001??)
+
+For Graphs:
+* !!!GRPH Library: the manual list a number of other libraries: http://www.i3s.unice.fr/~hogie/grph/
+  * Mascopt
+  * GraphStream
+  * Boost (C++)
+  * LEDA (C++)
+  * JgraphT
+  * JUNG
+  * SAGEMath (Python)
+
+Representation:
+* A node String gets converted to a node id (serial number)
+* the i-th entry in the node table contains the store index of the table of adjacent node ids
+  together with their relation ids or relation counts (both int)
+  There are two such tables, and two stores, one for the outgoing and one for 
+  the incoming edges
