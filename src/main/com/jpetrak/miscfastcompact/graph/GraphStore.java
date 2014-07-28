@@ -4,6 +4,7 @@ import com.jpetrak.miscfastcompact.store.StoreOfInts;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntAVLTreeMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -23,12 +24,14 @@ public class GraphStore {
   private StoreOfInts outEdges;
   private StoreOfInts inEdges;
   private Object2IntAVLTreeMap<String> uri2idMap;
+  //private HashMap<String,Integer> uri2idMap;
   private IntArrayList id2OutEdgeChunk;
   private IntArrayList id2InEdgeChunk;
   private int nextId = 0;
   
   public GraphStore() {
     uri2idMap = new Object2IntAVLTreeMap<String>();
+    //uri2idMap = new HashMap<String,Integer>();
     outEdges = new StoreOfInts();
     inEdges = new StoreOfInts();
     id2OutEdgeChunk = new IntArrayList();
@@ -43,7 +46,7 @@ public class GraphStore {
    */
   public int addNode(String uri) {
     if(uri2idMap.containsKey(uri)) {
-      return uri2idMap.getInt(uri);
+      return uri2idMap.get(uri);
     } else {
       int usedId = nextId;
       uri2idMap.put(uri, nextId);
@@ -57,7 +60,7 @@ public class GraphStore {
   // return the id or -1 if not found
   public int getNodeId(String uri) {
     if(uri2idMap.containsKey(uri)) {
-      return uri2idMap.getInt(uri);
+      return uri2idMap.get(uri);
     } else {
       return -1;
     }
