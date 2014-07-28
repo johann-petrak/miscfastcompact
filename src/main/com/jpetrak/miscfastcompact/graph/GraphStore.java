@@ -3,6 +3,7 @@ package com.jpetrak.miscfastcompact.graph;
 import com.jpetrak.miscfastcompact.store.StoreOfInts;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntAVLTreeMap;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.List;
  * Simple Graph store. Just a first attempt to create a graph store, WIP...
  * @author Johann Petrak
  */
-public class GraphStore {
+public class GraphStore implements Serializable {
   // The store consists of the following parts:
   // = a map from URI-String to Uri-id (an int, sequential 0...(n-1)
   // = an array that maps URI id to the out edge chunk index or -1 if no edge exists (yet)
