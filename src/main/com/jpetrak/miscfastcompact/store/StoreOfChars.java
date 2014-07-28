@@ -58,7 +58,7 @@ public class StoreOfChars implements Serializable {
   private char[] zeroChars = Utils.int2TwoChars(0); 
   private char[] oneChars = Utils.int2TwoChars(1);
   
-  
+  public int size() { return theList.size(); }
   // ********** VARIABLE LENGTH DATA METHODS **********
   
   /**

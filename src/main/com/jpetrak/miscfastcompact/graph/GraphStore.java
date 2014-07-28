@@ -1,9 +1,10 @@
 package com.jpetrak.miscfastcompact.graph;
 
-import com.jpetrak.miscfastcompact.store.StoreOfChars;
-import it.unimi.dsi.fastutil.chars.CharArrayList;
+import com.jpetrak.miscfastcompact.store.StoreOfInts;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntAVLTreeMap;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Simple Graph store. Just a first attempt to create a graph store, WIP...
@@ -19,135 +20,21 @@ public class GraphStore {
   //   is a table with two integers per row: first the id or count of the edg
   //   second the id of the to/from node
   
-  private StoreOfChars outEdges;
-  private StoreOfChars inEdges;
+  private StoreOfInts outEdges;
+  private StoreOfInts inEdges;
   private Object2IntAVLTreeMap<String> uri2idMap;
-  private CharArrayList id2OutEdgeChunk;
-  private CharArrayList id2InEdgeChunk;
+  private IntArrayList id2OutEdgeChunk;
+  private IntArrayList id2InEdgeChunk;
   private int nextId = 0;
   
   public GraphStore() {
     uri2idMap = new Object2IntAVLTreeMap<String>();
+    outEdges = new StoreOfInts();
+    inEdges = new StoreOfInts();
+    id2OutEdgeChunk = new IntArrayList();
+    id2InEdgeChunk = new IntArrayList();
   }
-  
-  // TO LOAD A GRAPH: for new this needs to be done in the following way:
-  // = for each (unique) URI, call addNode(uri)
-  // = add all the incoming and outgoing edges by calling
-  //   addInEdges(nodeid, listOfEdgeData, listOfNodeIds)
-  //   addOutEdges(nodeid, listOfEdgeData, listOfNodeIds)
 
-  // To make this easier, we allow a shortened approach that uses, temporarily
-  // a lot of memory:
-  // startImport(10000000);
-  // addEdge(fromNode,toNode,edgeData):
-  // finishImport();
-  
-  private StoreOfChars tmpInEdges;
-  private StoreOfChars tmpOutEdges; 
-  private IntArrayList tmpId2InChunk;
-  private IntArrayList tmpId2OutChunk;
-  
-  public void startImport(int capacity) {
-    tmpInEdges = new StoreOfChars(capacity);
-    tmpOutEdges = new StoreOfChars(capacity);
-    tmpId2InChunk = new IntArrayList();
-    tmpId2OutChunk = new IntArrayList();
-  }
-  public void addEdge(String fromNode, String toNode, int edgeData) {
-    
-    int fromId = getNodeId(fromNode);
-    if(fromId == -1) {
-      // have to add the node
-      fromId = addNode(fromNode);
-      // since this node is new, we do not have the chunk for the outgoing
-      // and incoming edges yet. For now, we simply store -1 
-      tmpId2InChunk.add(-1);
-      tmpId2OutChunk.add(-1);
-      if(tmpId2OutChunk.size()-1 != fromId) {
-        throw new RuntimeException("Error: id2OutChunk not equal to id");
-      }
-      if(tmpId2InChunk.size()-1 != fromId) {
-        throw new RuntimeException("Error: id2InChunk not equal to id");
-      }
-    } 
-    int toId = getNodeId(toNode);
-    if(toId == -1) {
-      // have to add the to node
-      toId = addNode(toNode);
-      tmpId2InChunk.add(-1);
-      tmpId2OutChunk.add(-1);
-      if(tmpId2OutChunk.size()-1 != toId) {
-        throw new RuntimeException("Error: id2OutChunk not equal to id");
-      }
-      if(tmpId2InChunk.size()-1 != toId) {
-        throw new RuntimeException("Error: id2InChunk not equal to id");
-      }
-    } 
-    // now we have to two node ids, and our chunk index tables either contain
-    // already an id or -1. For the edge we have, either create the necessary
-    // chunks or add the list element to an existing chunk
-    // 1) the outgoing edge from the fromNode to the toNode
-    char[] edge = new char[2];
-    edge[0] = (char) edgeData;
-    edge[1] = (char) toId;
-    int outChunk = tmpId2OutChunk.getInt(fromId);
-    if(outChunk == -1) {
-      // create a new chunk and store the index
-      tmpId2OutChunk.set(fromId, tmpOutEdges.addListData(edge));
-    } else {
-      tmpOutEdges.addListData(outChunk, edge);
-    }
-    edge[1] = (char) fromId;
-    int inChunk = tmpId2InChunk.getInt(toId);
-    if(inChunk == -1) {
-      tmpId2InChunk.set(toId, tmpInEdges.addListData(edge));
-    } else {
-      tmpInEdges.addListData(inChunk,edge);
-    }
-  }
-  
-  // for debugging mainly
-  public void debugPrintEdges(String uri) {
-    int id = getNodeId(uri);
-    if(id == -1) {
-      System.out.println("Node not known: "+uri);
-    } else {
-      System.out.println("Finding edges for node "+id);
-    }
-    // get the chunk for the in edges for uri
-    int inChunk = tmpId2InChunk.get(id);
-    if(inChunk == -1) {
-      System.out.println("No in edges for "+uri);
-    } else {
-      System.out.println("Chunk index for in edges "+inChunk);
-      int size = tmpInEdges.getListSize(inChunk);
-      System.out.println("Got in edges "+size);
-      for(int i=0; i<size; i++) {
-        char[] edge = tmpInEdges.getListData(inChunk, i);
-        System.out.println("In Edge "+i+": nodeid="+((int)edge[1])+", data="+((int)edge[0]));
-      }
-    }
-    int outChunk = tmpId2OutChunk.get(id);
-    if(outChunk == -1) {
-      System.out.println("No out edges for "+uri);
-    } else {
-      System.out.println("Chunk index for out edges "+outChunk);
-      int size = tmpOutEdges.getListSize(outChunk);
-      System.out.println("Got out edges "+size);
-      for(int i=0; i<size; i++) {
-        char[] edge = tmpOutEdges.getListData(outChunk, i);
-        System.out.println("Out Edge "+i+": nodeid="+((int)edge[1])+", data="+((int)edge[0]));
-      }
-     
-    }
-  }
-  
-  public void finishImport() {
-    // convert from the temporary data structures to the final ones!
-    
-  }
-  
-  
   /**
    * Add a node to the node list and return the id (unless it already exists,
    * then just return the id). 
@@ -160,6 +47,8 @@ public class GraphStore {
     } else {
       int usedId = nextId;
       uri2idMap.put(uri, nextId);
+      id2InEdgeChunk.add(-1);
+      id2OutEdgeChunk.add(-1);
       nextId++;
       return usedId;
     }
@@ -173,6 +62,106 @@ public class GraphStore {
       return -1;
     }
   }
+
+  // TO LOAD A GRAPH:
+  // First, add all the known nodes: addNode(uri) for all different uris
+  // Then for each node that has outgoing edges, add all the outgoing edges
+  // at once: addOutEdges(nodeId, listOfEdgeData, listOfNodeIds)
+  // Then for each node that has incoming edges, add all the incoming edges
+  // at once: addInEdges(nodeId, listOfEdgeData, listOfNodeIds)
+  // This could be achieved by reading in three files: one with just the 
+  // URIs, one sorted by first uri, one sorted by second uri, and the 
+  // loading program gathers all the information for blocks of identical 
+  // first or second uris
+  
+  /**
+   * Add all the incoming edges for a node. This assumes that all the nodes
+   * have already been added! For each node, this must only be called once!
+   * @param nodeId
+   * @param edgeData
+   * @param nodeIds 
+   */
+  public void addInEdges(int nodeId, List<Integer> edgeData, List<Integer> nodeIds) {
+    if(edgeData.size() != nodeIds.size()) {
+      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
+    }
+    int[] chunk = edgesLists2Chunk(edgeData, nodeIds);
+    int chunkIndex = inEdges.addData(chunk);
+    id2InEdgeChunk.set(nodeId, chunkIndex);
+  }
+  public void addOutEdges(int nodeId, List<Integer> edgeData, List<Integer> nodeIds) {
+    if(edgeData.size() != nodeIds.size()) {
+      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
+    }
+    int[] chunk = edgesLists2Chunk(edgeData, nodeIds);
+    int chunkIndex = outEdges.addData(chunk);
+    id2OutEdgeChunk.set(nodeId, chunkIndex);
+  }
+  private int[] edgesLists2Chunk(List<Integer> edgeData, List<Integer> nodeIds) {
+    if(edgeData.size() != nodeIds.size()) {
+      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
+    }
+    int size = edgeData.size()*2;
+    int[] chunk = new int[size];
+    for(int i=0; i<edgeData.size(); i++) {
+      chunk[2*i] = edgeData.get(i);
+      chunk[2*i+1] = nodeIds.get(i);
+    }
+    return chunk;
+  }
+  
+  
+  // for debugging mainly
+  public void debugPrintEdges(String uri) {
+    int id = getNodeId(uri);
+    if(id == -1) {
+      System.out.println("Node not known: "+uri);
+    } else {
+      System.out.println("Finding edges for node "+id);
+    }
+    // get the chunk for the in edges for uri
+    int inChunk = id2InEdgeChunk.get(id);
+    if(inChunk == -1) {
+      System.out.println("No in edges for "+uri);
+    } else {
+      System.out.println("Chunk index for in edges "+inChunk);
+      int[] chunk = inEdges.getData(inChunk);
+      int size = chunk.length/2;
+      System.out.println("Got in edges "+size);
+      for(int i=0; i<chunk.length; i++) {
+        int relData = chunk[2*i];
+        int nodeId = chunk[2*i+1];
+        System.out.println("In Edge "+i+": nodeid="+relData+", data="+nodeId);
+      }
+    }
+    int outChunk = id2OutEdgeChunk.get(id);
+    if(outChunk == -1) {
+      System.out.println("No out edges for "+uri);
+    } else {
+      System.out.println("Chunk index for out edges "+outChunk);
+      int[] chunk = outEdges.getData(outChunk);
+      int size = chunk.length/2;
+      System.out.println("Got out edges "+size);
+      for(int i=0; i<size; i++) {
+        int relData = chunk[2*i];
+        int nodeId = chunk[2*i+1];
+        System.out.println("Out Edge "+i+": nodeid="+relData+", data="+nodeId);
+      }
+    }
+  }
+  
+  public int debugGetInEdgesSize() {
+    return inEdges.size();
+  }
+  public int debugGetOutEdgesSize() {
+    return outEdges.size();
+  }
+  public int debugGetInId2ChunkSize() {
+    return id2InEdgeChunk.size();
+  }
+  public int debugGetOutId2ChunkSize() {
+    return id2OutEdgeChunk.size();
+  }
   
   
   // ******** HELPER METHODS for handling edge data
@@ -181,29 +170,27 @@ public class GraphStore {
     edges[(edgeNumber << 1)+1] = nodeId;
   }
   
-  // ******** HELPER METHODS for usign the char[] store
-  
-  // for storing the Edge data in a character chunk
-  private static char[] edges2Chunk(int[] edges) {
-    char[] ret = new char[edges.length];
-    for(int i=0; i<edges.length; i++) {
-      ret[i] = (char)edges[i];
-    }
-    return ret;
-  }
-  
   public static void main(String[] args) {
     System.out.println("Running main ...");
     GraphStore gstore = new GraphStore();
-    gstore.startImport(1);
+    gstore.addNode("uri1");
+    gstore.addNode("uri2");
+    gstore.addNode("uri3");
+    gstore.addNode("uri4");
+    gstore.addNode("uri5");
+    gstore.addNode("uri6");
     
-    gstore.addEdge("uri1", "uri2", 22);
-    gstore.addEdge("uri1", "uri3", 21);
-    gstore.addEdge("uri1", "uri4", 20);
-    gstore.addEdge("uri4", "uri5", 20);
-    //gstore.debugPrintEdges("uri1");
-    //gstore.debugPrintEdges("uri2");
-    //gstore.debugPrintEdges("uri4");
+    List<Integer> edgeData = new ArrayList<Integer>();
+    List<Integer> nodeIds = new ArrayList<Integer>();
+    
+    edgeData.add(22);
+    nodeIds.add(gstore.getNodeId("uri2"));
+    gstore.addOutEdges(gstore.getNodeId("uri1"), edgeData, nodeIds);
+    
+    gstore.debugPrintEdges("uri1");
+    gstore.debugPrintEdges("uri2");
+    System.out.println("InEdgesSize="+gstore.debugGetInEdgesSize());
+    System.out.println("OutEdgesSize="+gstore.debugGetOutEdgesSize());
     System.out.println("Finishing main ....");
   }
   
