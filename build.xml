@@ -14,7 +14,6 @@
   <path id="compile.classpath">
     <fileset dir="lib">
      <include name="**/*.jar" />
-      <include name="**/*.zip" />
     </fileset>
   </path>
 
@@ -79,9 +78,8 @@
     <fileset dir="lib">
       <include name="**/*.jar" />
     </fileset>
-    <fileset dir="${build}/test">
-      <include name="**/*.jar" />
-    </fileset>    
+    <pathelement location="${build}/test" />
+       
     <pathelement location="${jar.location}" />
   </path>
 
@@ -111,11 +109,11 @@
       </classpath>
       <sysproperty key="java.awt.headless" value="true" />
       <formatter type="xml" />
-      <test name="com.jpetrak.miscfastcompact.TestsAll" outfile="TestsAll" todir="testout" />
+      <test name="com.jpetrak.miscfastcompact.TestSuiteAll" outfile="TestSuiteAll" todir="testout" />
     </junit>
     <junitreport  tofile="testout/TestSuites.xml">
       <fileset dir="testout">
-        <include name="TEST-*.xml" />
+        <include name="TestSuiteAll*.xml" />
       </fileset>
       <report todir="testout" format="noframes" />
     </junitreport>
