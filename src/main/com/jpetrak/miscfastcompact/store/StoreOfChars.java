@@ -4,7 +4,6 @@ import com.jpetrak.miscfastcompact.utils.Utils;
 import it.unimi.dsi.fastutil.chars.CharArrayList;
 import java.io.Serializable;
 
-import it.unimi.dsi.fastutil.chars.CharBigArrayBigList;
 
 /**
  * This represents a store that can add and retrieve char[] elements. Each char[] chunk
@@ -12,21 +11,31 @@ import it.unimi.dsi.fastutil.chars.CharBigArrayBigList;
  * can be used to get it back. The size of each chunk as well as the number of 
  * chunks and the total size of all chunks is limited to MAXINT. 
  * <p>
- *  The store supports storing the following:
+ *  The store supports storing the following, and different kinds of data 
+ *  are stored using different API methods.
  *  <ul>
- *  <li>Varying length chunks. These consist of two chars that encode the length of the data 
- *  (not including the length field) followed  by the data
- *  <li>Fixed length chunks: just data, the client must know the length and supply it both when
- *  adding and retrieving data
- *  <li>Lists: each list consists of one or more elements of varying length chunks. The first 
+ *  <li>Varying length chunks. Store and retrieve char[] data of varying length.
+ *  Internally, we use two chars at the beginning of the stored sequence of
+ *  chars to represent an int which contains the length of the data 
+ *  (not including the length field).
+ *  <li>Fixed length chunks: store and retrieve data of a fixed length, 
+ *  the client must know the length and supply it both when adding and retrieving data.
+ *  <li>Lists: add and retrieve list elements where each list element is a 
+ *  variable size char[]. Internally, we use several chunks to store each of 
+ *  the list element, but to the user, the whole list is identified by the 
+ *  first chunk and list elements are identified by the first chunk and the 
+ *  element number. We store the number of elements in the first chunk and we 
+ *  store the chunk id of the following list element in each element. Thus, the first chunks
  *  of a list consists of the the chunk length, the list size, the index of the next element chunk
- *   and the actual chunk data for the first element. Elements 2-N consist of the chunk length,
+ *  and the actual chunk data for the first element. Elements 2-N consist of the chunk length,
  *   the index of the next element chunk and the actual chunk data. Next chunk index and in the 
  *   first element, the list size are included in chunk length, the chunk length field itself
- *   is not.
+ *   is not. Thus, the payload of the first chunk is the list length, the
+ *   next element index, and then the actual list element data, while the payload
+ *   of all other elements is the next element index and the actual element data.
  *  </ul>
- * 
- * @author Johann Petrak
+
+* @author Johann Petrak
  *
  */
 public class StoreOfChars implements Serializable {
@@ -49,10 +58,14 @@ public class StoreOfChars implements Serializable {
   private char[] zeroChars = Utils.int2TwoChars(0); 
   private char[] oneChars = Utils.int2TwoChars(1);
   
+  
+  // ********** VARIABLE LENGTH DATA METHODS **********
+  
   /**
-   * Add some data and get back the index under which we can get it back
-   * @param data
-   * @return
+   * Add variable length data and get back the index under which we can get it back.
+   * 
+   * @param the data
+   * @return index that can be used to get back the data
    */
   public int addData(char[] data) {
     // remember where we store the data
@@ -68,9 +81,27 @@ public class StoreOfChars implements Serializable {
     curIndex += data.length+2;
     return oldIndex;
   }
+  
+  /** 
+   * Get variable length data from the given index.
+   * @param index
+   * @return
+   */
+  public char[] getData(int index) {
+    // retrieve the length 
+    int l = Utils.twoChars2Int(theList.get(index), theList.get(index+1));
+    // now retrieve the characters for this data block
+    char data[] = new char[l];
+    for(int i=0; i<l; i++) {
+      data[i] = theList.get(index+2+i);
+    }
+    return data;
+  }
 
+  // ********** FIXED LENGTH DATA METHODS **********
+  
   /**
-   * Add some data and get back the index under which we can get it back. This will 
+   * Add fixed length data and get back the index under which we can get it back. This will 
    * add a chunk of data of known length to the store: no length is stored in the 
    * store for this chunk. This chunk can only be retrieved with the getFixedLengthData
    * method.
@@ -87,6 +118,16 @@ public class StoreOfChars implements Serializable {
     return oldIndex;
   }
   
+  /**
+   * Replace a block of fixed length data with new data. 
+   * The data passed to this method must be of exactly the same length
+   * as the data originally stored, otherwise the whole store will get
+   * corrupted!
+   * 
+   * @param index
+   * @param data
+   * @return 
+   */
   public int replaceFixedLengthData(int index, char[] data) {
     for(int i = 0; i<data.length; i++) {
       theList.set(index+i,data[i]);
@@ -96,23 +137,10 @@ public class StoreOfChars implements Serializable {
  
   
   /** 
-   * Get the data from at the given index.
-   * @param index
-   * @return
-   */
-  public char[] getData(int index) {
-    // retrieve the length 
-    int l = Utils.twoChars2Int(theList.get(index), theList.get(index+1));
-    // now retrieve the characters for this data block
-    char data[] = new char[l];
-    for(int i=0; i<l; i++) {
-      data[i] = theList.get(index+2+i);
-    }
-    return data;
-  }
-
-  /** 
-   * Get data of known length from at the given index.
+   * Get fixed length data from the given index.
+   * The length must be exactly the same as used when storing the fixed
+   * length data and the data must have been stored with the addFixedLengthData
+   * method.
    * @param index
    * @return
    */
@@ -124,9 +152,13 @@ public class StoreOfChars implements Serializable {
     return data;
   }
   
+  // ********** LIST DATA METHODS **********
+  
+  
   /**
    * Add a new list to the store and return its index. After this, a list with 
-   * length of 1 is stored.
+   * length of 1 is stored. The list element data itself is variable length
+   * data. 
    * 
    * @param data
    * @return
@@ -155,11 +187,12 @@ public class StoreOfChars implements Serializable {
   
   /**
    * Append additional data blocks to a list that already exists in the store at 
-   * the given index. if index is <=0, add a new list.
+   * the given index. If the given index is less than 0, this is identical
+   * to addListData(data) and will create a new chunk and return its index.
    * 
    * @param index
    * @param data
-   * @return
+   * @return 
    */
   // TODO: instead of doing getData to get the element indices, just directly access
   // the characters
@@ -249,14 +282,15 @@ public class StoreOfChars implements Serializable {
   }
   
   /** 
-   * Find the chunk among all the list elements stored at index and 
-   * return the index of the element (>= 0) if found or -1 if not found.
+   * Find the element index of the chunk among all the list elements stored at index
+   * or return -1 if not found. 
+   * 
    * 
    * @param index index of the list in the store
    * @param chunk the chunk to find
    * @return the index of the chunk in the list or -1 if not found
    */
-  public int findListData(int index, char[] chunk) {
+  public int findListElementIndex(int index, char[] chunk) {
     int elementIndex = 0;
     
     // if the list exists at all, there always must be at least one element, so
@@ -282,15 +316,7 @@ public class StoreOfChars implements Serializable {
     return -1;
   }
 
-  
-  /**
-   * Check if the characters in the store, starting at index and having length length,
-   * are identical to the characters of the chunk. 
-   * @param index
-   * @param length
-   * @param chunk
-   * @return
-   */
+  // Utilit method used by findListElementIndex
   protected boolean isChunkEqual(int index, int length, char[] chunk) {
     if(chunk.length != length) {
       return false;
@@ -304,7 +330,7 @@ public class StoreOfChars implements Serializable {
   }
   
   /**
-   * Return the size of the list at the given index
+   * Return the size of the list at the given index. 
    * @param index
    * @return
    */
@@ -313,7 +339,8 @@ public class StoreOfChars implements Serializable {
   }
   
   //*******************************************************************
-  
+  // internal utility methods 
+  // ******************************************************************
   
   private int getNextElementIndex4First(int index) {
     return Utils.twoChars2Int(theList.get(index+4), theList.get(index+5));
@@ -356,6 +383,9 @@ public class StoreOfChars implements Serializable {
   
   
   private void addChars(char[] cs) {
+    if((theList.size()+cs.length) < 0) {
+      throw new RuntimeException("Capacity of store exhausted, adding data would wrap index");
+    }
     for(char c : cs) {
       theList.add(c);
     }
