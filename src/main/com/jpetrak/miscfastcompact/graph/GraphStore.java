@@ -123,7 +123,9 @@ public class GraphStore implements Serializable {
     // first check the sizes of the two edge chunks and pick the 
     // smaller one for finding the edge!
     int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    if(chunkIndex1<0) { return Integer.MIN_VALUE; }
     int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    if(chunkIndex2<0) { return Integer.MIN_VALUE; }
     int size1 = outEdges.getSize(chunkIndex1);
     int size2 = inEdges.getSize(chunkIndex2);
     //System.out.println("Node1="+nodeId1+", node2="+nodeId2+", size1="+size1+", size2="+size2);
@@ -133,11 +135,11 @@ public class GraphStore implements Serializable {
     if(size1 < size2) {
       // find in the outgoing edges
       chunk = outEdges.getData(chunkIndex1);
-      index = findFirstNodeIndex(nodeId2, chunk);   
+      index = binarySearchInEntries(chunk, nodeId2, 0);
     } else {
       // find in the incoming edges
       chunk = inEdges.getData(chunkIndex2);
-      index = findFirstNodeIndex(nodeId1, chunk);
+      index = binarySearchInEntries(chunk, nodeId1, 0);
     }
     if(index >= 0) {
       ret = chunk[index+1];  // we found the index of the nodeId, the data is behind that
@@ -153,35 +155,55 @@ public class GraphStore implements Serializable {
     //   if not found. We use that index as the starting point for the search
     //   in the next iteration.
     int chunkIndex1 = id2InEdgeChunk.get(nodeId1);
+    if(chunkIndex1<0) { 
+      //System.out.println("DEBUG: no in edges: "+nodeId1);
+      return 0; 
+    }
     int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    if(chunkIndex2<0) { 
+      //System.out.println("DEBUG: no in edges: "+nodeId1);
+      return 0; 
+    }
     int size1 = inEdges.getSize(chunkIndex1);
     int size2 = inEdges.getSize(chunkIndex2);
     int sumData = 0;
     int[] chunk1, chunk2;
-    int index, startIndex;
+    int index, startIndex, sizeToSearch;
     if(size1 < size2) {
       chunk1 = inEdges.getData(chunkIndex1);
       chunk2 = inEdges.getData(chunkIndex2);
+      sizeToSearch = size2;
     } else {
       chunk1 = inEdges.getData(chunkIndex2);
       chunk2 = inEdges.getData(chunkIndex1);
+      sizeToSearch = size1;
     }
     startIndex = 0;
+    //System.out.println("DEBUG: size1="+size1+", size2="+size2);
     // go through the edges in chunk1 and get the other node, then 
     // try to find the other node in the other chunk and adjust the 
     // starting search position for the next iteration.
+    //System.out.println("DEBUG: dump of chunk1 edges:");
+    //debugDumpEdges(chunk1);
+    //System.out.println("DEBUG: dump of chunk2 edges:");
+    //debugDumpEdges(chunk2);
     for(int i=0; i<chunk1.length/2; i++) {
       int otherNodeId = chunk1[2*i];
       index = binarySearchInEntries(chunk2, otherNodeId, startIndex);
+      //System.out.println("DEBUG: checked otherNode="+otherNodeId+" with start="+startIndex+", index="+index);
       // if we found something, we should add the edgeData of both edges to the sum
       // in any case, set the startIndex to point to the node which is greater
       // than the one we just found (because we go through our own nodes in 
       // increasing order)
       if(index >= 0) { // found it
-        sumData = chunk1[2*i+1] + chunk2[index+1];
+        //System.out.println("DEBUG: found at index="+index+", this count="+chunk1[2*i+1]+" other="+chunk2[index+1]);
+        sumData += chunk1[2*i+1] + chunk2[index+1];
         startIndex = index+2;
-      } else { // did not find the other Node
-        startIndex = -index;
+      } else { // did not find the other Node        
+        startIndex = (-index)-2;
+        if(startIndex > sizeToSearch) {
+          break;
+        }
       }
     }
     return sumData;
@@ -195,7 +217,9 @@ public class GraphStore implements Serializable {
     //   if not found. We use that index as the starting point for the search
     //   in the next iteration.
     int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    if(chunkIndex1<0) { return 0; }
     int chunkIndex2 = id2OutEdgeChunk.get(nodeId2);
+    if(chunkIndex2<0) { return 0; }
     int size1 = outEdges.getSize(chunkIndex1);
     int size2 = outEdges.getSize(chunkIndex2);
     int sumData = 0;
@@ -220,10 +244,10 @@ public class GraphStore implements Serializable {
       // than the one we just found (because we go through our own nodes in 
       // increasing order)
       if(index >= 0) { // found it
-        sumData = chunk1[2*i+1] + chunk2[index+1];
+        sumData += chunk1[2*i+1] + chunk2[index+1];
         startIndex = index+2;
       } else { // did not find the other Node
-        startIndex = -index;
+        startIndex = (-index)-2;
       }
     }
     return sumData;
@@ -237,7 +261,9 @@ public class GraphStore implements Serializable {
     //   if not found. We use that index as the starting point for the search
     //   in the next iteration.
     int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    if(chunkIndex1<0) { return 0; }
     int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    if(chunkIndex2<0) { return 0; }
     int size1 = outEdges.getSize(chunkIndex1);
     int size2 = inEdges.getSize(chunkIndex2);
     int sumData = 0;
@@ -262,10 +288,10 @@ public class GraphStore implements Serializable {
       // than the one we just found (because we go through our own nodes in 
       // increasing order)
       if(index >= 0) { // found it
-        sumData = chunk1[2*i+1] + chunk2[index+1];
+        sumData += chunk1[2*i+1] + chunk2[index+1];
         startIndex = index+2;
       } else { // did not find the other Node
-        startIndex = -index;
+        startIndex = (-index)-2;
       }
     }
     return sumData;
@@ -291,16 +317,28 @@ public class GraphStore implements Serializable {
   // if not found.
   // NOTE: start must be an even number, i.e. start always must be the index
   // if a nodeId!!
+  protected int linearSearchInEntries(int[] entries, int find, int start) {    
+    for(int i=start/2;i<entries.length/2;i++) {
+      if(entries[2*i]>find) {
+        return -(2*i)-2;
+      } else if(entries[2*i]==find) {
+        return 2*i;
+      }
+    }
+    return -entries.length-4;
+  }
+  
+  
   protected int binarySearchInEntries(int[] entries, int find, int start) {
     if(start > (entries.length-2)) {
       return -start;
     }
-    int nrentries = (entries.length-start) / 2;
-    int low = start;
-    int high = nrentries - 1;
+    int nrentries = (entries.length) / 2 - start/2;
+    int low = start/2;
+    int high = low+(nrentries - 1);
 
     while (low <= high) {
-        int mid = (low + high) >>> 1;
+        int mid = (low + high)/2;
         int midVal = entries[mid*2];
 
         if (midVal < find)
@@ -308,9 +346,9 @@ public class GraphStore implements Serializable {
         else if (midVal > find)
             high = mid - 1;
         else
-            return mid*2; // key found
+            return (mid*2); // key found
     }
-    return 2*(-low)-2;  // key not found.    
+    return  2*(-low)-2;  // key not found.    
   }
   
   
