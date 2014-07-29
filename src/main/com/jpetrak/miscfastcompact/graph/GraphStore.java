@@ -119,7 +119,7 @@ public class GraphStore implements Serializable {
   
   // find the edge data of the first or only edge between two nodes or Integer.MIN_VALUE if
   // no edge was found
-  public int findFirstEdgeData(int nodeId1, int nodeId2) {
+  public int getFirstEdgeData(int nodeId1, int nodeId2) {
     // first check the sizes of the two edge chunks and pick the 
     // smaller one for finding the edge!
     int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
@@ -145,6 +145,133 @@ public class GraphStore implements Serializable {
     return ret;
   }
   
+  public int getSumEdgeDataSharedParent(int nodeId1, int nodeId2) {
+    // = check which edge list is smaller, use that one
+    // = for each edge in the smaller list, try to find the edge data 
+    //   in the other list. The search routine returns the index if found
+    //   or the smallest index for a node id larger than the wanted (negated)
+    //   if not found. We use that index as the starting point for the search
+    //   in the next iteration.
+    int chunkIndex1 = id2InEdgeChunk.get(nodeId1);
+    int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    int size1 = inEdges.getSize(chunkIndex1);
+    int size2 = inEdges.getSize(chunkIndex2);
+    int sumData = 0;
+    int[] chunk1, chunk2;
+    int index, startIndex;
+    if(size1 < size2) {
+      chunk1 = inEdges.getData(chunkIndex1);
+      chunk2 = inEdges.getData(chunkIndex2);
+    } else {
+      chunk1 = inEdges.getData(chunkIndex2);
+      chunk2 = inEdges.getData(chunkIndex1);
+    }
+    startIndex = 0;
+    // go through the edges in chunk1 and get the other node, then 
+    // try to find the other node in the other chunk and adjust the 
+    // starting search position for the next iteration.
+    for(int i=0; i<chunk1.length/2; i++) {
+      int otherNodeId = chunk1[2*i];
+      index = binarySearchInEntries(chunk2, otherNodeId, startIndex);
+      // if we found something, we should add the edgeData of both edges to the sum
+      // in any case, set the startIndex to point to the node which is greater
+      // than the one we just found (because we go through our own nodes in 
+      // increasing order)
+      if(index >= 0) { // found it
+        sumData = chunk1[2*i+1] + chunk2[index+1];
+        startIndex = index+2;
+      } else { // did not find the other Node
+        startIndex = -index;
+      }
+    }
+    return sumData;
+  }
+  
+  public int getSumEdgeDataSharedChild(int nodeId1, int nodeId2) {
+    // = check which edge list is smaller, use that one
+    // = for each edge in the smaller list, try to find the edge data 
+    //   in the other list. The search routine returns the index if found
+    //   or the smallest index for a node id larger than the wanted (negated)
+    //   if not found. We use that index as the starting point for the search
+    //   in the next iteration.
+    int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    int chunkIndex2 = id2OutEdgeChunk.get(nodeId2);
+    int size1 = outEdges.getSize(chunkIndex1);
+    int size2 = outEdges.getSize(chunkIndex2);
+    int sumData = 0;
+    int[] chunk1, chunk2;
+    int index, startIndex;
+    if(size1 < size2) {
+      chunk1 = outEdges.getData(chunkIndex1);
+      chunk2 = outEdges.getData(chunkIndex2);
+    } else {
+      chunk1 = outEdges.getData(chunkIndex2);
+      chunk2 = outEdges.getData(chunkIndex1);
+    }
+    startIndex = 0;
+    // go through the edges in chunk1 and get the other node, then 
+    // try to find the other node in the other chunk and adjust the 
+    // starting search position for the next iteration.
+    for(int i=0; i<chunk1.length/2; i++) {
+      int otherNodeId = chunk1[2*i];
+      index = binarySearchInEntries(chunk2, otherNodeId, startIndex);
+      // if we found something, we should add the edgeData of both edges to the sum
+      // in any case, set the startIndex to point to the node which is greater
+      // than the one we just found (because we go through our own nodes in 
+      // increasing order)
+      if(index >= 0) { // found it
+        sumData = chunk1[2*i+1] + chunk2[index+1];
+        startIndex = index+2;
+      } else { // did not find the other Node
+        startIndex = -index;
+      }
+    }
+    return sumData;
+  }
+  
+  public int getSumEdgeDataSequence(int nodeId1, int nodeId2) {
+    // = check which edge list is smaller, use that one
+    // = for each edge in the smaller list, try to find the edge data 
+    //   in the other list. The search routine returns the index if found
+    //   or the smallest index for a node id larger than the wanted (negated)
+    //   if not found. We use that index as the starting point for the search
+    //   in the next iteration.
+    int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    int size1 = outEdges.getSize(chunkIndex1);
+    int size2 = inEdges.getSize(chunkIndex2);
+    int sumData = 0;
+    int[] chunk1, chunk2;
+    int index, startIndex;
+    if(size1 < size2) {
+      chunk1 = outEdges.getData(chunkIndex1);
+      chunk2 = inEdges.getData(chunkIndex2);
+    } else {
+      chunk1 = inEdges.getData(chunkIndex2);
+      chunk2 = outEdges.getData(chunkIndex1);
+    }
+    startIndex = 0;
+    // go through the edges in chunk1 and get the other node, then 
+    // try to find the other node in the other chunk and adjust the 
+    // starting search position for the next iteration.
+    for(int i=0; i<chunk1.length/2; i++) {
+      int otherNodeId = chunk1[2*i];
+      index = binarySearchInEntries(chunk2, otherNodeId, startIndex);
+      // if we found something, we should add the edgeData of both edges to the sum
+      // in any case, set the startIndex to point to the node which is greater
+      // than the one we just found (because we go through our own nodes in 
+      // increasing order)
+      if(index >= 0) { // found it
+        sumData = chunk1[2*i+1] + chunk2[index+1];
+        startIndex = index+2;
+      } else { // did not find the other Node
+        startIndex = -index;
+      }
+    }
+    return sumData;
+  }
+  
+  
   /**
    * Given an otherNode id and a chunk of edges, find the index of the first
    * edge that matches the node id or return -1 if not found.
@@ -154,7 +281,7 @@ public class GraphStore implements Serializable {
    */
   public int findFirstNodeIndex(int nodeId, int[] chunk) {
     // we use our own version of binary sort to find the node
-    return binarySearchInEntries(chunk, nodeId);
+    return binarySearchInEntries(chunk, nodeId, 0);
   }
   
   // A modification of binary search that only looks at the indices 
@@ -162,9 +289,14 @@ public class GraphStore implements Serializable {
   // This searches the entries array to find the key in one of these positions
   // and returns the index (>= 0) if found or the insertion point as a negative int
   // if not found.
-  protected int binarySearchInEntries(int[] entries, int find) {
-    int nrentries = entries.length / 2;
-    int low = 0;
+  // NOTE: start must be an even number, i.e. start always must be the index
+  // if a nodeId!!
+  protected int binarySearchInEntries(int[] entries, int find, int start) {
+    if(start > (entries.length-2)) {
+      return -start;
+    }
+    int nrentries = (entries.length-start) / 2;
+    int low = start;
     int high = nrentries - 1;
 
     while (low <= high) {
@@ -178,7 +310,7 @@ public class GraphStore implements Serializable {
         else
             return mid*2; // key found
     }
-    return 2*(-low)-1;  // key not found.    
+    return 2*(-low)-2;  // key not found.    
   }
   
   
@@ -310,9 +442,10 @@ public class GraphStore implements Serializable {
     System.out.println("OutEdgesSize="+gstore.debugGetOutEdgesSize());
     System.out.println("Name for id 1: "+nstore.getNodeName(1));
     System.out.println("Name for id 2: "+nstore.getNodeName(2));
-    System.out.println("Edge between uri1 and uri2: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri2")));
-    System.out.println("Edge between uri1 and uri3: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri3")));
-    System.out.println("Edge between uri1 and uri4: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri4")));
+    System.out.println("Edge between uri1 and uri2: "+gstore.getFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri2")));
+    System.out.println("Edge between uri1 and uri3: "+gstore.getFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri3")));
+    System.out.println("Edge between uri1 and uri4: "+gstore.getFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri4")));
+    System.out.println("Parent sum uri3, uri2: "+gstore.getSumEdgeDataSharedParent(gstore.getNodeId("uri3"), gstore.getNodeId("uri2")));
     System.out.println("Finishing main ....");
   }
   
