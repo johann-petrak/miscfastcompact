@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntAVLTreeMap;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -81,35 +82,35 @@ public class GraphStore implements Serializable {
   /**
    * Add all the incoming edges for a node. This assumes that all the nodes
    * have already been added! For each node, this must only be called once!
+   * Also, the list MUST already be sorted by increasing Edge.nodeId!
    * @param nodeId
    * @param edgeData
    * @param nodeIds 
    */
-  public void addInEdges(int nodeId, List<Integer> edgeData, List<Integer> nodeIds) {
-    if(edgeData.size() != nodeIds.size()) {
-      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
-    }
-    int[] chunk = edgesLists2Chunk(edgeData, nodeIds);
+  public void addSortedInEdges(int nodeId, List<Edge> edges) {
+    int[] chunk = edgesList2Chunk(edges);
     int chunkIndex = inEdges.addData(chunk);
     id2InEdgeChunk.set(nodeId, chunkIndex);
   }
-  public void addOutEdges(int nodeId, List<Integer> edgeData, List<Integer> nodeIds) {
-    if(edgeData.size() != nodeIds.size()) {
-      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
-    }
-    int[] chunk = edgesLists2Chunk(edgeData, nodeIds);
+  public void addInEdges(int nodeId, List<Edge> edges) {
+    Collections.sort(edges);
+    addSortedInEdges(nodeId,edges);
+  }
+  public void addSortedOutEdges(int nodeId, List<Edge> edges) {
+    int[] chunk = edgesList2Chunk(edges);
     int chunkIndex = outEdges.addData(chunk);
     id2OutEdgeChunk.set(nodeId, chunkIndex);
   }
-  private int[] edgesLists2Chunk(List<Integer> edgeData, List<Integer> nodeIds) {
-    if(edgeData.size() != nodeIds.size()) {
-      throw new RuntimeException("Not the same number of elements for edgeData and nodeIds: "+edgeData.size()+"/"+nodeIds.size());
-    }
-    int size = edgeData.size()*2;
-    int[] chunk = new int[size];
-    for(int i=0; i<edgeData.size(); i++) {
-      chunk[2*i] = edgeData.get(i);
-      chunk[2*i+1] = nodeIds.get(i);
+  public void addOutEdges(int nodeId, List<Edge> edges) {
+    Collections.sort(edges);
+    addSortedOutEdges(nodeId,edges);
+  }
+  private int[] edgesList2Chunk(List<Edge> edges) {
+    int size = edges.size();
+    int[] chunk = new int[size*2];
+    for(int i=0; i<size; i++) {
+      chunk[2*i] = edges.get(i).edgeData;
+      chunk[2*i+1] = edges.get(i).nodeId;
     }
     return chunk;
   }
@@ -132,10 +133,10 @@ public class GraphStore implements Serializable {
       int[] chunk = inEdges.getData(inChunk);
       int size = chunk.length/2;
       System.out.println("Got in edges "+size);
-      for(int i=0; i<chunk.length; i++) {
+      for(int i=0; i<size; i++) {
         int relData = chunk[2*i];
         int nodeId = chunk[2*i+1];
-        System.out.println("In Edge "+i+": nodeid="+relData+", data="+nodeId);
+        System.out.println("In Edge "+i+": nodeid="+nodeId+", data="+relData);
       }
     }
     int outChunk = id2OutEdgeChunk.get(id);
@@ -149,7 +150,7 @@ public class GraphStore implements Serializable {
       for(int i=0; i<size; i++) {
         int relData = chunk[2*i];
         int nodeId = chunk[2*i+1];
-        System.out.println("Out Edge "+i+": nodeid="+relData+", data="+nodeId);
+        System.out.println("Out Edge "+i+": nodeid="+nodeId+", data="+relData);
       }
     }
   }
@@ -168,33 +169,55 @@ public class GraphStore implements Serializable {
   }
   
   
-  // ******** HELPER METHODS for handling edge data
-  private static void setEdge(int[] edges, int edgeNumber, int edgedata, int nodeId) {
-    edges[edgeNumber << 1] = edgedata;
-    edges[(edgeNumber << 1)+1] = nodeId;
-  }
-  
   public static void main(String[] args) {
     System.out.println("Running main ...");
     GraphStore gstore = new GraphStore();
+    NodeNameStore nstore = new NodeNameStore();
     gstore.addNode("uri1");
+    nstore.addNode("uri1");
     gstore.addNode("uri2");
+    nstore.addNode("uri2");
     gstore.addNode("uri3");
+    nstore.addNode("uri3");
     gstore.addNode("uri4");
+    nstore.addNode("uri4");
     gstore.addNode("uri5");
+    nstore.addNode("uri5");
     gstore.addNode("uri6");
+    nstore.addNode("uri6");
     
-    List<Integer> edgeData = new ArrayList<Integer>();
-    List<Integer> nodeIds = new ArrayList<Integer>();
+    ArrayList<Edge> edges = new ArrayList<Edge>();
     
-    edgeData.add(22);
-    nodeIds.add(gstore.getNodeId("uri2"));
-    gstore.addOutEdges(gstore.getNodeId("uri1"), edgeData, nodeIds);
+    edges.add(new Edge(22,gstore.getNodeId("uri2")));
+    edges.add(new Edge(23,gstore.getNodeId("uri3")));
+    gstore.addOutEdges(gstore.getNodeId("uri1"), edges);
+
+    edges = new ArrayList<Edge>();
+    edges.add(new Edge(24,gstore.getNodeId("uri3")));
+    edges.add(new Edge(23,gstore.getNodeId("uri4")));
+    gstore.addOutEdges(gstore.getNodeId("uri2"), edges);
+    
+    edges = new ArrayList<Edge>();
+    edges.add(new Edge(22,gstore.getNodeId("uri1")));
+    gstore.addInEdges(gstore.getNodeId("uri2"), edges);
+    
+    edges = new ArrayList<Edge>();
+    edges.add(new Edge(23,gstore.getNodeId("uri1")));
+    edges.add(new Edge(24,gstore.getNodeId("uri2")));
+    gstore.addInEdges(gstore.getNodeId("uri3"), edges);
+    
+    edges = new ArrayList<Edge>();
+    edges.add(new Edge(23,gstore.getNodeId("uri2")));
+    gstore.addInEdges(gstore.getNodeId("uri4"), edges);
     
     gstore.debugPrintEdges("uri1");
     gstore.debugPrintEdges("uri2");
+    gstore.debugPrintEdges("uri3");
+    gstore.debugPrintEdges("uri4");
     System.out.println("InEdgesSize="+gstore.debugGetInEdgesSize());
     System.out.println("OutEdgesSize="+gstore.debugGetOutEdgesSize());
+    System.out.println("Name for id 1: "+nstore.getNodeName(1));
+    System.out.println("Name for id 2: "+nstore.getNodeName(2));
     System.out.println("Finishing main ....");
   }
   
