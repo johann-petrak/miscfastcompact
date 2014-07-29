@@ -83,6 +83,8 @@ public class GraphStore implements Serializable {
    * Add all the incoming edges for a node. This assumes that all the nodes
    * have already been added! For each node, this must only be called once!
    * Also, the list MUST already be sorted by increasing Edge.nodeId!
+   * Node that all edge data must be != Integer.MIN_VALUE, but this is not 
+   * checked!
    * @param nodeId
    * @param edgeData
    * @param nodeIds 
@@ -109,12 +111,102 @@ public class GraphStore implements Serializable {
     int size = edges.size();
     int[] chunk = new int[size*2];
     for(int i=0; i<size; i++) {
-      chunk[2*i] = edges.get(i).edgeData;
-      chunk[2*i+1] = edges.get(i).nodeId;
+      chunk[2*i] = edges.get(i).nodeId;
+      chunk[2*i+1] = edges.get(i).edgeData;
     }
     return chunk;
   }
   
+  // find the edge data of the first or only edge between two nodes or Integer.MIN_VALUE if
+  // no edge was found
+  public int findFirstEdgeData(int nodeId1, int nodeId2) {
+    // first check the sizes of the two edge chunks and pick the 
+    // smaller one for finding the edge!
+    int chunkIndex1 = id2OutEdgeChunk.get(nodeId1);
+    int chunkIndex2 = id2InEdgeChunk.get(nodeId2);
+    int size1 = outEdges.getSize(chunkIndex1);
+    int size2 = inEdges.getSize(chunkIndex2);
+    //System.out.println("Node1="+nodeId1+", node2="+nodeId2+", size1="+size1+", size2="+size2);
+    int ret = Integer.MIN_VALUE;
+    int chunk[];
+    int index;
+    if(size1 < size2) {
+      // find in the outgoing edges
+      chunk = outEdges.getData(chunkIndex1);
+      index = findFirstNodeIndex(nodeId2, chunk);   
+    } else {
+      // find in the incoming edges
+      chunk = inEdges.getData(chunkIndex2);
+      index = findFirstNodeIndex(nodeId1, chunk);
+    }
+    if(index >= 0) {
+      ret = chunk[index+1];  // we found the index of the nodeId, the data is behind that
+    }
+    return ret;
+  }
+  
+  /**
+   * Given an otherNode id and a chunk of edges, find the index of the first
+   * edge that matches the node id or return -1 if not found.
+   * @param nodeId
+   * @param chunk
+   * @return 
+   */
+  public int findFirstNodeIndex(int nodeId, int[] chunk) {
+    // we use our own version of binary sort to find the node
+    return binarySearchInEntries(chunk, nodeId);
+  }
+  
+  // A modification of binary search that only looks at the indices 
+  // 0, 2, 4, .... in the array
+  // This searches the entries array to find the key in one of these positions
+  // and returns the index (>= 0) if found or the insertion point as a negative int
+  // if not found.
+  protected int binarySearchInEntries(int[] entries, int find) {
+    int nrentries = entries.length / 2;
+    int low = 0;
+    int high = nrentries - 1;
+
+    while (low <= high) {
+        int mid = (low + high) >>> 1;
+        int midVal = entries[mid*2];
+
+        if (midVal < find)
+            low = mid + 1;
+        else if (midVal > find)
+            high = mid - 1;
+        else
+            return mid*2; // key found
+    }
+    return 2*(-low)-1;  // key not found.    
+  }
+  
+  
+  public void debugDumpEdges(int[] chunk) {
+    for(int i=0;i<chunk.length/2;i++) {
+      System.out.println("Edge nodeId="+chunk[2*i]+" edgedata="+chunk[2*i+1]);
+    }
+  }
+  public void debugDumpOutEdges(String node) {
+    int nodeId = getNodeId(node);
+    int chunkIndex = id2OutEdgeChunk.getInt(nodeId);
+    if(chunkIndex < 0) {
+      System.out.println("No out Edges for "+node);
+    } else {
+      int[] chunk = outEdges.getData(chunkIndex);
+      debugDumpEdges(chunk);
+    }
+  }
+  public void debugDumpInEdges(String node) {
+    int nodeId = getNodeId(node);
+    int chunkIndex = id2InEdgeChunk.getInt(nodeId);
+    if(chunkIndex < 0) {
+      System.out.println("No in edges for "+node);
+    } else {
+      int[] chunk = inEdges.getData(chunkIndex);
+      debugDumpEdges(chunk);
+    }
+  }
   
   // for debugging mainly
   public void debugPrintEdges(String uri) {
@@ -134,8 +226,8 @@ public class GraphStore implements Serializable {
       int size = chunk.length/2;
       System.out.println("Got in edges "+size);
       for(int i=0; i<size; i++) {
-        int relData = chunk[2*i];
-        int nodeId = chunk[2*i+1];
+        int relData = chunk[2*i+1];
+        int nodeId = chunk[2*i];
         System.out.println("In Edge "+i+": nodeid="+nodeId+", data="+relData);
       }
     }
@@ -148,8 +240,8 @@ public class GraphStore implements Serializable {
       int size = chunk.length/2;
       System.out.println("Got out edges "+size);
       for(int i=0; i<size; i++) {
-        int relData = chunk[2*i];
-        int nodeId = chunk[2*i+1];
+        int relData = chunk[2*i+1];
+        int nodeId = chunk[2*i];
         System.out.println("Out Edge "+i+": nodeid="+nodeId+", data="+relData);
       }
     }
@@ -218,6 +310,9 @@ public class GraphStore implements Serializable {
     System.out.println("OutEdgesSize="+gstore.debugGetOutEdgesSize());
     System.out.println("Name for id 1: "+nstore.getNodeName(1));
     System.out.println("Name for id 2: "+nstore.getNodeName(2));
+    System.out.println("Edge between uri1 and uri2: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri2")));
+    System.out.println("Edge between uri1 and uri3: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri3")));
+    System.out.println("Edge between uri1 and uri4: "+gstore.findFirstEdgeData(gstore.getNodeId("uri1"), gstore.getNodeId("uri4")));
     System.out.println("Finishing main ....");
   }
   

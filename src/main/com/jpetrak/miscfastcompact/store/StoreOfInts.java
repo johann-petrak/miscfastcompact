@@ -65,6 +65,16 @@ public class StoreOfInts implements Serializable {
     return data;
   }
 
+  /** 
+   * Get the size of the variable data stored at the given index.
+   * @param index
+   * @return 
+   */
+  public int getSize(int index) {
+    return theList.get(index);
+  }
+  
+  
   // ********** FIXED LENGTH DATA METHODS **********
   
   /**

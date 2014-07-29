@@ -4,6 +4,7 @@
  */
 package com.jpetrak.miscfastcompact.graph;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +17,7 @@ import java.util.List;
  * 
  * @author Johann Petrak
  */
-public class NodeNameStore {
+public class NodeNameStore implements Serializable {
   private List<String> namesById = new ArrayList<String>();
   /**
    * Add a node name - this MUST be done exactly at the same time when the
